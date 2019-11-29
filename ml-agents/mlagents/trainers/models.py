@@ -6,6 +6,8 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as c_layers
 
+from mlagents.trainers.custom_layer_specs import CustomConvLayerSpecs
+
 from mlagents.trainers.trainer import UnityTrainerException
 from mlagents.envs.brain import CameraResolution
 
@@ -16,10 +18,12 @@ ActivationFunction = Callable[[tf.Tensor], tf.Tensor]
 EPSILON = 1e-7
 
 
+
 class EncoderType(Enum):
     SIMPLE = "simple"
     NATURE_CNN = "nature_cnn"
     RESNET = "resnet"
+    CUSTOM = "custom"
 
 
 class LearningRateSchedule(Enum):
@@ -292,6 +296,55 @@ class LearningModel(object):
         return hidden_flat
 
     @staticmethod
+    def create_custom_observation_encoder(
+        image_input: tf.Tensor,
+        h_size: int,
+        activation: ActivationFunction,
+        num_layers: int,
+        scope: str,
+        reuse: bool,
+        layers_specs: List[CustomConvLayerSpecs] = [],
+    ) -> tf.Tensor:
+        """
+        Builds a set of resnet visual encoders.
+        :param image_input: The placeholder for the image input to use.
+        :param h_size: Hidden layer size.
+        :param activation: What type of activation function to use for layers.
+        :param num_layers: number of hidden layers to create.
+        :param scope: The scope of the graph within which to create the ops.
+        :param reuse: Whether to re-use the weights within the same scope.
+        :return: List of hidden layer tensors.
+        """
+        with tf.variable_scope(scope):
+
+            current_layer = image_input
+
+            for layer_index, layer_specs in enumerate(layers_specs):
+
+                print(layer_specs)
+
+                current_layer = tf.layers.conv2d(
+                    current_layer,
+                    layer_specs.filters,
+                    kernel_size=layer_specs.kernel_shape,
+                    strides=layer_specs.strides,
+                    activation=layer_specs.activation,
+                    kernel_initializer=layer_specs.kernel_initializer,
+                    bias_initializer=layer_specs.bias_initializer,
+                    use_bias=layer_specs.use_bias,
+                    reuse=reuse,
+                    name="conv_{}".format(layer_index),
+                )
+
+            hidden = c_layers.flatten(current_layer)
+
+        with tf.variable_scope(scope + "/" + "flat_encoding"):
+            hidden_flat = LearningModel.create_vector_observation_encoder(
+                hidden, h_size, activation, num_layers, scope, reuse
+            )
+        return hidden_flat
+
+    @staticmethod
     def create_nature_cnn_visual_observation_encoder(
         image_input: tf.Tensor,
         h_size: int,
@@ -468,6 +521,7 @@ class LearningModel(object):
         num_layers: int,
         vis_encode_type: EncoderType = EncoderType.SIMPLE,
         stream_scopes: List[str] = None,
+        layers_specs: List[CustomConvLayerSpecs]=[]
     ) -> List[tf.Tensor]:
         """
         Creates encoding stream for observations.
@@ -497,6 +551,10 @@ class LearningModel(object):
             create_encoder_func = (
                 LearningModel.create_nature_cnn_visual_observation_encoder
             )
+        elif vis_encode_type == EncoderType.CUSTOM:
+            create_encoder_func = (
+                LearningModel.create_custom_observation_encoder
+            )
 
         final_hiddens = []
         for i in range(num_streams):
@@ -505,14 +563,26 @@ class LearningModel(object):
             _scope_add = stream_scopes[i] if stream_scopes else ""
             if self.vis_obs_size > 0:
                 for j in range(brain.number_visual_observations):
-                    encoded_visual = create_encoder_func(
-                        self.visual_in[j],
-                        h_size,
-                        activation_fn,
-                        num_layers,
-                        scope=f"{_scope_add}main_graph_{i}_encoder{j}",
-                        reuse=False,
-                    )
+                    if vis_encode_type == EncoderType.CUSTOM:
+                        print("--check")
+                        encoded_visual = create_encoder_func(
+                            self.visual_in[j],
+                            h_size,
+                            activation_fn,
+                            num_layers,
+                            scope=f"{_scope_add}main_graph_{i}_encoder{j}",
+                            reuse=False,
+                            layers_specs=layers_specs
+                        )
+                    else:
+                        encoded_visual = create_encoder_func(
+                            self.visual_in[j],
+                            h_size,
+                            activation_fn,
+                            num_layers,
+                            scope=f"{_scope_add}main_graph_{i}_encoder{j}",
+                            reuse=False,
+                        )
                     visual_encoders.append(encoded_visual)
                 hidden_visual = tf.concat(visual_encoders, axis=1)
             if brain.vector_observation_space_size > 0:

@@ -1,8 +1,10 @@
 import logging
 import numpy as np
 
+from typing import List
 import tensorflow as tf
 from mlagents.trainers.models import LearningModel, EncoderType, LearningRateSchedule
+from mlagents.trainers.custom_layer_specs import CustomConvLayerSpecs
 
 logger = logging.getLogger("mlagents.trainers")
 
@@ -24,6 +26,8 @@ class PPOModel(LearningModel):
         seed=0,
         stream_names=None,
         vis_encode_type=EncoderType.SIMPLE,
+        layers_specs: List[CustomConvLayerSpecs]=[],
+
     ):
         """
         Takes a Unity environment and model-specific hyper-parameters and returns the
@@ -49,10 +53,10 @@ class PPOModel(LearningModel):
         if num_layers < 1:
             num_layers = 1
         if brain.vector_action_space_type == "continuous":
-            self.create_cc_actor_critic(h_size, num_layers, vis_encode_type)
+            self.create_cc_actor_critic(h_size, num_layers, vis_encode_type, layers_specs)
             self.entropy = tf.ones_like(tf.reshape(self.value, [-1])) * self.entropy
         else:
-            self.create_dc_actor_critic(h_size, num_layers, vis_encode_type)
+            self.create_dc_actor_critic(h_size, num_layers, vis_encode_type, layers_specs)
         self.learning_rate = self.create_learning_rate(
             lr_schedule, lr, self.global_step, max_step
         )
@@ -68,7 +72,8 @@ class PPOModel(LearningModel):
         )
 
     def create_cc_actor_critic(
-        self, h_size: int, num_layers: int, vis_encode_type: EncoderType
+        self, h_size: int, num_layers: int, vis_encode_type: EncoderType, 
+        layers_specs: List[CustomConvLayerSpecs]=[]
     ) -> None:
         """
         Creates Continuous control actor-critic model.
@@ -76,7 +81,7 @@ class PPOModel(LearningModel):
         :param num_layers: Number of hidden linear layers.
         """
         hidden_streams = self.create_observation_streams(
-            2, h_size, num_layers, vis_encode_type
+            2, h_size, num_layers, vis_encode_type, layers_specs=layers_specs
         )
 
         if self.use_recurrent:
@@ -158,7 +163,8 @@ class PPOModel(LearningModel):
         )
 
     def create_dc_actor_critic(
-        self, h_size: int, num_layers: int, vis_encode_type: EncoderType
+        self, h_size: int, num_layers: int, vis_encode_type: EncoderType, 
+        layers_specs: List[CustomConvLayerSpecs]=[]
     ) -> None:
         """
         Creates Discrete control actor-critic model.
@@ -166,7 +172,7 @@ class PPOModel(LearningModel):
         :param num_layers: Number of hidden linear layers.
         """
         hidden_streams = self.create_observation_streams(
-            1, h_size, num_layers, vis_encode_type
+            1, h_size, num_layers, vis_encode_type, layers_specs=layers_specs
         )
         hidden = hidden_streams[0]
 

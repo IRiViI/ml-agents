@@ -12,6 +12,7 @@ from mlagents.trainers.components.reward_signals.reward_signal_factory import (
     create_reward_signal,
 )
 from mlagents.trainers.components.bc.module import BCModule
+from mlagents.trainers.custom_layer_specs import CustomConvLayerSpecs
 
 logger = logging.getLogger("mlagents.trainers")
 
@@ -76,6 +77,16 @@ class PPOPolicy(TFPolicy):
         :param reward_signal_configs: Reward signal config
         :param seed: Random seed.
         """
+        layers_specs = []
+        for layer_specs in trainer_params["layers_specs"]:
+            layer_specs_copy = layer_specs.copy()
+            if layer_specs_copy["type"] == "conv2D":
+                del layer_specs_copy["type"]
+                custom_conv_layer_specs = CustomConvLayerSpecs(**layer_specs_copy)
+                layers_specs.append(custom_conv_layer_specs)
+            else:
+                raise TypeError("layer of type {} is not known".format(layer_specs_copy["type"]))
+
         with self.graph.as_default():
             self.model = PPOModel(
                 brain=brain,
@@ -96,6 +107,7 @@ class PPOPolicy(TFPolicy):
                 vis_encode_type=EncoderType(
                     trainer_params.get("vis_encode_type", "simple")
                 ),
+                layers_specs=layers_specs,
             )
             self.model.create_ppo_optimizer()
 
