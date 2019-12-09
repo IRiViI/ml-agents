@@ -12,7 +12,7 @@ from mlagents.trainers.components.reward_signals.reward_signal_factory import (
     create_reward_signal,
 )
 from mlagents.trainers.components.bc.module import BCModule
-from mlagents.trainers.custom_layer_specs import CustomConvLayerSpecs
+from mlagents.trainers.custom_layer_specs import CustomLayerSpecs, CustomConvLayerSpecs, CustomDenseLayerSpecs
 
 logger = logging.getLogger("mlagents.trainers")
 
@@ -83,6 +83,10 @@ class PPOPolicy(TFPolicy):
             if layer_specs_copy["type"] == "conv2D":
                 del layer_specs_copy["type"]
                 custom_conv_layer_specs = CustomConvLayerSpecs(**layer_specs_copy)
+                layers_specs.append(custom_conv_layer_specs)
+            elif layer_specs_copy["type"] == "dense":
+                del layer_specs_copy["type"]
+                custom_conv_layer_specs = CustomDenseLayerSpecs(**layer_specs_copy)
                 layers_specs.append(custom_conv_layer_specs)
             else:
                 raise TypeError("layer of type {} is not known".format(layer_specs_copy["type"]))

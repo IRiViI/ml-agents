@@ -6,7 +6,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as c_layers
 
-from mlagents.trainers.custom_layer_specs import CustomConvLayerSpecs
+from mlagents.trainers.custom_layer_specs import CustomLayerSpecs, CustomConvLayerSpecs, CustomDenseLayerSpecs
 
 from mlagents.trainers.trainer import UnityTrainerException
 from mlagents.envs.brain import CameraResolution
@@ -303,7 +303,7 @@ class LearningModel(object):
         num_layers: int,
         scope: str,
         reuse: bool,
-        layers_specs: List[CustomConvLayerSpecs] = [],
+        layers_specs: List[CustomLayerSpecs] = [],
     ) -> tf.Tensor:
         """
         Builds a set of resnet visual encoders.
@@ -321,7 +321,9 @@ class LearningModel(object):
 
             for layer_index, layer_specs in enumerate(layers_specs):
 
-                print(layer_specs)
+                # Only process convolution layers
+                if type(layer_specs) != CustomConvLayerSpecs:
+                    continue
 
                 current_layer = tf.layers.conv2d(
                     current_layer,
@@ -335,14 +337,44 @@ class LearningModel(object):
                     reuse=reuse,
                     name="conv_{}".format(layer_index),
                 )
+                if layer_specs.maxPool == True:
+
+                    current_layer = tf.layers.max_pooling2d(
+                        current_layer, 
+                        (2,2), 
+                        (2,2),
+                        padding='same')
 
             hidden = c_layers.flatten(current_layer)
 
         with tf.variable_scope(scope + "/" + "flat_encoding"):
-            hidden_flat = LearningModel.create_vector_observation_encoder(
-                hidden, h_size, activation, num_layers, scope, reuse
-            )
-        return hidden_flat
+
+            with tf.variable_scope(scope):
+
+                for layer_index, layer_specs in enumerate(layers_specs):
+                    # Only process dense layers
+                    if type(layer_specs) != CustomDenseLayerSpecs:
+                        continue
+
+                    if layer_specs.kernel_initializer == "default":
+                        layer_specs.kernel_initializer = c_layers.variance_scaling_initializer(1.0)
+
+                    if layer_specs.activation == "default":
+                        layer_specs.activation = activation
+
+                    hidden = tf.layers.dense(
+                        hidden,
+                        layer_specs.nodes,
+                        activation=layer_specs.activation,
+                        reuse=reuse,
+                        name="hidden_{}".format(layer_index),
+                        kernel_initializer=layer_specs.kernel_initializer,
+                        bias_initializer=layer_specs.bias_initializer,
+                        use_bias=layer_specs.use_bias,
+
+                    )
+
+        return hidden
 
     @staticmethod
     def create_nature_cnn_visual_observation_encoder(
@@ -521,7 +553,7 @@ class LearningModel(object):
         num_layers: int,
         vis_encode_type: EncoderType = EncoderType.SIMPLE,
         stream_scopes: List[str] = None,
-        layers_specs: List[CustomConvLayerSpecs]=[]
+        layers_specs: List[CustomLayerSpecs]=[]
     ) -> List[tf.Tensor]:
         """
         Creates encoding stream for observations.
@@ -564,7 +596,6 @@ class LearningModel(object):
             if self.vis_obs_size > 0:
                 for j in range(brain.number_visual_observations):
                     if vis_encode_type == EncoderType.CUSTOM:
-                        print("--check")
                         encoded_visual = create_encoder_func(
                             self.visual_in[j],
                             h_size,

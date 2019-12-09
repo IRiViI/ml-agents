@@ -4,7 +4,7 @@ import numpy as np
 from typing import List
 import tensorflow as tf
 from mlagents.trainers.models import LearningModel, EncoderType, LearningRateSchedule
-from mlagents.trainers.custom_layer_specs import CustomConvLayerSpecs
+from mlagents.trainers.custom_layer_specs import CustomLayerSpecs, CustomConvLayerSpecs, CustomDenseLayerSpecs
 
 logger = logging.getLogger("mlagents.trainers")
 
@@ -26,7 +26,7 @@ class PPOModel(LearningModel):
         seed=0,
         stream_names=None,
         vis_encode_type=EncoderType.SIMPLE,
-        layers_specs: List[CustomConvLayerSpecs]=[],
+        layers_specs: List[CustomLayerSpecs]=[],
 
     ):
         """
@@ -73,7 +73,7 @@ class PPOModel(LearningModel):
 
     def create_cc_actor_critic(
         self, h_size: int, num_layers: int, vis_encode_type: EncoderType, 
-        layers_specs: List[CustomConvLayerSpecs]=[]
+        layers_specs: List[CustomLayerSpecs]=[]
     ) -> None:
         """
         Creates Continuous control actor-critic model.
@@ -164,7 +164,7 @@ class PPOModel(LearningModel):
 
     def create_dc_actor_critic(
         self, h_size: int, num_layers: int, vis_encode_type: EncoderType, 
-        layers_specs: List[CustomConvLayerSpecs]=[]
+        layers_specs: List[CustomLayerSpecs]=[]
     ) -> None:
         """
         Creates Discrete control actor-critic model.
